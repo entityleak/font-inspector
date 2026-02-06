@@ -77,6 +77,16 @@
         };
       },
     },
+    fontFeatureSettings: {
+      extract(style) {
+        const ffs = style.fontFeatureSettings;
+        return {
+          value: ffs,
+          colorKey: ffs,
+          label: `font-feature-settings: ${ffs}`,
+        };
+      },
+    },
   };
 
   // Color assignment
@@ -251,6 +261,7 @@
       const fontWeight = style.fontWeight;
       const lineHeight = style.lineHeight;
       const letterSpacing = style.letterSpacing;
+      const fontFeatureSettings = style.fontFeatureSettings;
 
       const key = `${fontFamily}|${fontSize}|${fontWeight}|${lineHeight}|${letterSpacing}`;
 
@@ -261,11 +272,14 @@
           fontWeight,
           lineHeight,
           letterSpacing,
+          fontFeatureSettings: new Set(),
           count: 0,
           tags: new Set(),
           elementIds: [],
         });
       }
+
+      styleMap.get(key).fontFeatureSettings.add(fontFeatureSettings);
 
       const entry = styleMap.get(key);
       entry.count++;
@@ -312,6 +326,7 @@
       .map((entry) => ({
         ...entry,
         tags: Array.from(entry.tags),
+        fontFeatureSettings: Array.from(entry.fontFeatureSettings),
       }))
       .sort((a, b) => parseFloat(b.fontSize) - parseFloat(a.fontSize));
 

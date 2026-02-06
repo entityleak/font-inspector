@@ -51,6 +51,9 @@ async function init() {
     sample.style.fontWeight = entry.fontWeight;
     sample.style.lineHeight = entry.lineHeight;
     sample.style.letterSpacing = entry.letterSpacing;
+    if (entry.fontFeatureSettings && entry.fontFeatureSettings.length) {
+      sample.style.fontFeatureSettings = entry.fontFeatureSettings[0];
+    }
     row.appendChild(sample);
 
     // Properties line
@@ -69,9 +72,12 @@ async function init() {
         ? "0"
         : `${((parseFloat(entry.letterSpacing) / fsVal) * 100).toFixed(2)}%`;
 
+    const ffsValues = entry.fontFeatureSettings || [];
+    const ffsDisplay = ffsValues.filter((v) => v !== "normal").join(", ") || "normal";
+
     const props = document.createElement("div");
     props.className = "wf-props";
-    props.textContent = `${primaryFont} — ${entry.fontSize} — ${entry.fontWeight} — line-height: ${lhDisplay} — letter-spacing: ${lsDisplay}`;
+    props.textContent = `${primaryFont} — ${entry.fontSize} — ${entry.fontWeight} — line-height: ${lhDisplay} — letter-spacing: ${lsDisplay} — features: ${ffsDisplay}`;
     row.appendChild(props);
 
     // Metadata line

@@ -284,7 +284,19 @@
       try {
         for (const rule of sheet.cssRules) {
           if (rule instanceof CSSFontFaceRule) {
-            fontFaceRules.push(rule.cssText);
+            // Resolve relative URLs to absolute so they work from the extension page
+            const baseUrl = sheet.href || document.baseURI;
+            const cssText = rule.cssText.replace(
+              /url\(["']?([^"')]+)["']?\)/g,
+              (match, url) => {
+                try {
+                  return `url("${new URL(url, baseUrl).href}")`;
+                } catch {
+                  return match;
+                }
+              }
+            );
+            fontFaceRules.push(cssText);
           }
         }
       } catch {

@@ -1,0 +1,14 @@
+#fi-tooltip {
+  position: fixed;
+  z-index: 2147483647;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  font: 12px/1.4 "SF Mono", "Fira Code", "Consolas", monospace;
+  border-radius: 4px;
+  border-left: 3px solid #888;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: opacity 0.1s ease;
+}

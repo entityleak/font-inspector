@@ -2,15 +2,35 @@ const SAMPLE_TEXT = "The quick brown fox jumps over the lazy dog";
 const MAX_CHIPS = 10;
 
 async function init() {
-  const { waterfallData, waterfallTabId } = await chrome.storage.local.get([
-    "waterfallData",
-    "waterfallTabId",
-  ]);
+  const { waterfallData, waterfallTabId, waterfallFontFaces, waterfallExternalSheets } =
+    await chrome.storage.local.get([
+      "waterfallData",
+      "waterfallTabId",
+      "waterfallFontFaces",
+      "waterfallExternalSheets",
+    ]);
 
   if (!waterfallData || !waterfallData.length) {
     document.getElementById("waterfall").textContent =
       "No typographic styles found on the page.";
     return;
+  }
+
+  // Inject @font-face rules collected from same-origin stylesheets
+  if (waterfallFontFaces && waterfallFontFaces.length) {
+    const style = document.createElement("style");
+    style.textContent = waterfallFontFaces.join("\n");
+    document.head.appendChild(style);
+  }
+
+  // Link cross-origin stylesheets (e.g. Google Fonts)
+  if (waterfallExternalSheets && waterfallExternalSheets.length) {
+    for (const href of waterfallExternalSheets) {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = href;
+      document.head.appendChild(link);
+    }
   }
 
   document.getElementById("summary").textContent =
@@ -105,5 +125,11 @@ async function init() {
     container.appendChild(row);
   }
 }
+
+// Antialiased toggle — enabled by default
+document.body.classList.add("antialiased");
+document.getElementById("antialiased-toggle").addEventListener("change", (e) => {
+  document.body.classList.toggle("antialiased", e.target.checked);
+});
 
 init();

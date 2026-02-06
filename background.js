@@ -95,7 +95,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
 
       await chrome.storage.local.set({
-        waterfallData: data,
+        waterfallData: data.styles,
+        waterfallFontFaces: data.fontFaceRules,
+        waterfallExternalSheets: data.externalStylesheetUrls,
         waterfallTabId: tabId,
       });
 

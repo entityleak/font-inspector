@@ -276,13 +276,34 @@
       entry.elementIds.push(wfId);
     }
 
+    // Collect font-face rules and external stylesheet URLs
+    const fontFaceRules = [];
+    const externalStylesheetUrls = [];
+
+    for (const sheet of document.styleSheets) {
+      try {
+        for (const rule of sheet.cssRules) {
+          if (rule instanceof CSSFontFaceRule) {
+            fontFaceRules.push(rule.cssText);
+          }
+        }
+      } catch {
+        // Cross-origin stylesheet — grab the URL so waterfall can link it
+        if (sheet.href) {
+          externalStylesheetUrls.push(sheet.href);
+        }
+      }
+    }
+
     // Convert to serializable array, sorted by fontSize descending
-    return Array.from(styleMap.values())
+    const styles = Array.from(styleMap.values())
       .map((entry) => ({
         ...entry,
         tags: Array.from(entry.tags),
       }))
       .sort((a, b) => parseFloat(b.fontSize) - parseFloat(a.fontSize));
+
+    return { styles, fontFaceRules, externalStylesheetUrls };
   }
 
   // Waterfall: scroll to element and flash it

@@ -8,6 +8,21 @@ function getState(tabId) {
   return tabState.get(tabId);
 }
 
+async function ensureContentScript(tabId) {
+  const state = getState(tabId);
+  if (!state.injected) {
+    await chrome.scripting.insertCSS({
+      target: { tabId },
+      files: ["styles.css"],
+    });
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["content.js"],
+    });
+    state.injected = true;
+  }
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === "getMode") {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -27,18 +42,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const tabId = tabs[0].id;
       const state = getState(tabId);
 
-      // Inject content script if not yet injected
-      if (!state.injected) {
-        await chrome.scripting.insertCSS({
-          target: { tabId },
-          files: ["styles.css"],
-        });
-        await chrome.scripting.executeScript({
-          target: { tabId },
-          files: ["content.js"],
-        });
-        state.injected = true;
-      }
+      await ensureContentScript(tabId);
 
       // Forward mode to content script
       state.mode = msg.mode;
@@ -67,6 +71,48 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         chrome.action.setBadgeBackgroundColor({ tabId, color: "#4CAF50" });
       } else {
         chrome.action.setBadgeText({ tabId, text: "" });
+      }
+    });
+  }
+
+  if (msg.action === "waterfall") {
+    chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+      if (!tabs[0]) return;
+      const tabId = tabs[0].id;
+
+      await ensureContentScript(tabId);
+
+      // Small delay to ensure content script listener is ready
+      const trySend = () =>
+        chrome.tabs.sendMessage(tabId, { action: "collectStyles" });
+
+      let data;
+      try {
+        data = await trySend();
+      } catch {
+        await new Promise((r) => setTimeout(r, 150));
+        data = await trySend();
+      }
+
+      await chrome.storage.local.set({
+        waterfallData: data,
+        waterfallTabId: tabId,
+      });
+
+      chrome.tabs.create({ url: chrome.runtime.getURL("waterfall.html") });
+    });
+  }
+
+  if (msg.action === "scrollTo") {
+    chrome.tabs.sendMessage(msg.tabId, {
+      action: "scrollTo",
+      wfId: msg.wfId,
+    });
+    // Focus the original tab
+    chrome.tabs.update(msg.tabId, { active: true });
+    chrome.tabs.get(msg.tabId, (tab) => {
+      if (tab && tab.windowId) {
+        chrome.windows.update(tab.windowId, { focused: true });
       }
     });
   }

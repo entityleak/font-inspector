@@ -50,3 +50,30 @@ body {
   border-color: #4CAF50;
   color: #6fdb7f;
 }
+
+.waterfall-section {
+  padding: 6px;
+  border-top: 1px solid #333;
+}
+
+.waterfall-btn {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  text-align: center;
+  background: #1a3a5c;
+  color: #7eb8f0;
+  border: 1px solid #2d6cb4;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.waterfall-btn:hover {
+  background: #244a72;
+  border-color: #4a9af5;
+  color: #a8d4ff;
+}

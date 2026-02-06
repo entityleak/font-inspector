@@ -29,3 +29,8 @@ buttons.forEach((btn) => {
     chrome.runtime.sendMessage({ action: "setMode", mode: activeMode });
   });
 });
+
+document.getElementById("waterfall-btn").addEventListener("click", () => {
+  chrome.runtime.sendMessage({ action: "waterfall" });
+  window.close();
+});

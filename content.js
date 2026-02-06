@@ -219,13 +219,107 @@
     hueIndex = 0;
   }
 
+  // Waterfall: collect unique style combinations
+  let wfIdCounter = 0;
+
+  function collectStyles() {
+    const styleMap = new Map();
+
+    const walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode(node) {
+          if (!node.textContent.trim()) return NodeFilter.FILTER_REJECT;
+          return NodeFilter.FILTER_ACCEPT;
+        },
+      }
+    );
+
+    const processed = new Set();
+
+    while (walker.nextNode()) {
+      const el = walker.currentNode.parentElement;
+      if (!el || processed.has(el)) continue;
+      processed.add(el);
+
+      if (el.id === TOOLTIP_ID || el.closest(`#${TOOLTIP_ID}`)) continue;
+
+      const style = getComputedStyle(el);
+      const fontFamily = style.fontFamily;
+      const fontSize = style.fontSize;
+      const fontWeight = style.fontWeight;
+      const lineHeight = style.lineHeight;
+      const letterSpacing = style.letterSpacing;
+
+      const key = `${fontFamily}|${fontSize}|${fontWeight}|${lineHeight}|${letterSpacing}`;
+
+      if (!styleMap.has(key)) {
+        styleMap.set(key, {
+          fontFamily,
+          fontSize,
+          fontWeight,
+          lineHeight,
+          letterSpacing,
+          count: 0,
+          tags: new Set(),
+          elementIds: [],
+        });
+      }
+
+      const entry = styleMap.get(key);
+      entry.count++;
+      entry.tags.add(el.tagName.toLowerCase());
+
+      const wfId = `wf-${wfIdCounter++}`;
+      el.setAttribute("data-fi-wf-id", wfId);
+      entry.elementIds.push(wfId);
+    }
+
+    // Convert to serializable array, sorted by fontSize descending
+    return Array.from(styleMap.values())
+      .map((entry) => ({
+        ...entry,
+        tags: Array.from(entry.tags),
+      }))
+      .sort((a, b) => parseFloat(b.fontSize) - parseFloat(a.fontSize));
+  }
+
+  // Waterfall: scroll to element and flash it
+  function scrollToElement(wfId) {
+    const el = document.querySelector(`[data-fi-wf-id="${wfId}"]`);
+    if (!el) return;
+
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    el.style.outline = "3px solid #4a9af5";
+    el.style.outlineOffset = "2px";
+    el.style.transition = "outline-color 0.3s ease";
+
+    setTimeout(() => {
+      el.style.outline = "";
+      el.style.outlineOffset = "";
+      el.style.transition = "";
+    }, 1500);
+  }
+
   // Listen for mode changes from background
-  chrome.runtime.onMessage.addListener((msg) => {
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.action === "setMode") {
       removeHighlights();
       if (msg.mode && modes[msg.mode]) {
         scan(modes[msg.mode]);
       }
+    }
+
+    if (msg.action === "collectStyles") {
+      const data = collectStyles();
+      sendResponse(data);
+      return true;
+    }
+
+    if (msg.action === "scrollTo") {
+      scrollToElement(msg.wfId);
     }
   });
 })();

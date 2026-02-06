@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Font Inspector",
-  "version": "1.0.0",
-  "description": "Highlights text elements with letter-spacing, color-coded by value for QA inspection.",
+  "version": "1.1.0",
+  "description": "Highlights text elements by typographic properties for QA inspection.",
   "permissions": ["activeTab", "scripting"],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Toggle Letter-Spacing Inspector"
+    "default_title": "Font Inspector",
+    "default_popup": "popup.html"
   }
 }

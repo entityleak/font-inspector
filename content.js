@@ -1,22 +1,91 @@
 (() => {
   // Guard against double-injection
-  if (window.__fontInspectorActive) return;
-  window.__fontInspectorActive = true;
+  if (window.__fontInspectorInjected) return;
+  window.__fontInspectorInjected = true;
 
-  const ATTR = "data-fi-ls";
-  const ATTR_FS = "data-fi-fs";
-  const ATTR_PCT = "data-fi-pct";
+  const ATTR_VALUE = "data-fi-value";
+  const ATTR_KEY = "data-fi-key";
+  const ATTR_LABEL = "data-fi-label";
   const ATTR_ORIG_BG = "data-fi-orig-bg";
-  const ATTR_ORIG_BORDER = "data-fi-orig-border";
   const ATTR_ORIG_OUTLINE = "data-fi-orig-outline";
   const TOOLTIP_ID = "fi-tooltip";
 
+  // Mode configurations
+  const modes = {
+    letterSpacing: {
+      extract(style) {
+        const ls = style.letterSpacing;
+        if (ls === "normal" || ls === "0px") return null;
+        const fs = parseFloat(style.fontSize);
+        const pct = ((parseFloat(ls) / fs) * 100).toFixed(2);
+        return {
+          value: ls,
+          colorKey: pct,
+          label: `letter-spacing: ${ls} (${pct}%)`,
+        };
+      },
+    },
+    fontSize: {
+      extract(style) {
+        const fs = style.fontSize;
+        return {
+          value: fs,
+          colorKey: fs,
+          label: `font-size: ${fs}`,
+        };
+      },
+    },
+    fontFamily: {
+      extract(style) {
+        const ff = style.fontFamily;
+        // Use the first font in the stack as the key
+        const primary = ff.split(",")[0].trim().replace(/['"]/g, "");
+        return {
+          value: ff,
+          colorKey: primary,
+          label: `font-family: ${primary}`,
+        };
+      },
+    },
+    fontWeight: {
+      extract(style) {
+        const fw = style.fontWeight;
+        return {
+          value: fw,
+          colorKey: fw,
+          label: `font-weight: ${fw}`,
+        };
+      },
+    },
+    lineHeight: {
+      extract(style) {
+        const lh = style.lineHeight;
+        const fs = style.fontSize;
+        const fsVal = parseFloat(fs);
+        if (lh === "normal") {
+          return {
+            value: lh,
+            colorKey: "normal",
+            label: `line-height: normal | font-size: ${fs}`,
+          };
+        }
+        const pct = ((parseFloat(lh) / fsVal) * 100).toFixed(0);
+        return {
+          value: lh,
+          colorKey: pct,
+          label: `line-height: ${lh} (${pct}%) | font-size: ${fs}`,
+        };
+      },
+    },
+  };
+
+  // Color assignment
   const colorMap = new Map();
   let hueIndex = 0;
-  const HUE_STEP = 47; // Golden-angle-ish step for good distribution
+  const HUE_STEP = 47;
 
-  function getColorForValue(value) {
-    if (colorMap.has(value)) return colorMap.get(value);
+  function getColorForKey(key) {
+    if (colorMap.has(key)) return colorMap.get(key);
 
     const hue = (hueIndex * HUE_STEP) % 360;
     hueIndex++;
@@ -26,36 +95,36 @@
       border: `hsl(${hue}, 70%, 50%)`,
       hue,
     };
-    colorMap.set(value, color);
+    colorMap.set(key, color);
     return color;
   }
 
-  // Create tooltip element
-  const tooltip = document.createElement("div");
-  tooltip.id = TOOLTIP_ID;
-  tooltip.style.display = "none";
-  document.body.appendChild(tooltip);
+  // Tooltip
+  let tooltip = document.getElementById(TOOLTIP_ID);
+  if (!tooltip) {
+    tooltip = document.createElement("div");
+    tooltip.id = TOOLTIP_ID;
+    tooltip.style.display = "none";
+    document.body.appendChild(tooltip);
+  }
 
   function showTooltip(e) {
     const el = e.currentTarget;
-    const value = el.getAttribute(ATTR);
-    if (!value) return;
+    const label = el.getAttribute(ATTR_LABEL);
+    const key = el.getAttribute(ATTR_KEY);
+    if (!label) return;
 
-    const pct = el.getAttribute(ATTR_PCT);
-    const color = colorMap.get(pct);
-    tooltip.textContent = `letter-spacing: ${value} (${pct}%)`;
+    const color = colorMap.get(key);
+    tooltip.textContent = label;
     tooltip.style.display = "block";
     tooltip.style.borderLeftColor = color ? color.border : "#888";
     positionTooltip(e);
   }
 
   function positionTooltip(e) {
-    const x = e.clientX + 12;
-    const y = e.clientY + 12;
-    tooltip.style.left = `${x}px`;
-    tooltip.style.top = `${y}px`;
+    tooltip.style.left = `${e.clientX + 12}px`;
+    tooltip.style.top = `${e.clientY + 12}px`;
 
-    // Keep tooltip on screen
     const rect = tooltip.getBoundingClientRect();
     if (rect.right > window.innerWidth) {
       tooltip.style.left = `${e.clientX - rect.width - 8}px`;
@@ -75,14 +144,13 @@
     }
   }
 
-  // Scan the DOM and highlight elements with letter-spacing
-  function scan() {
+  // Scan DOM with given mode config
+  function scan(modeConfig) {
     const walker = document.createTreeWalker(
       document.body,
       NodeFilter.SHOW_TEXT,
       {
         acceptNode(node) {
-          // Skip empty/whitespace-only text nodes
           if (!node.textContent.trim()) return NodeFilter.FILTER_REJECT;
           return NodeFilter.FILTER_ACCEPT;
         },
@@ -92,66 +160,53 @@
     const processed = new Set();
 
     while (walker.nextNode()) {
-      const textNode = walker.currentNode;
-      const el = textNode.parentElement;
-
+      const el = walker.currentNode.parentElement;
       if (!el || processed.has(el)) continue;
       processed.add(el);
 
-      // Skip our own tooltip
       if (el.id === TOOLTIP_ID || el.closest(`#${TOOLTIP_ID}`)) continue;
 
       const style = getComputedStyle(el);
-      const ls = style.letterSpacing;
-      const fs = style.fontSize;
+      const result = modeConfig.extract(style);
+      if (!result) continue;
 
-      // Skip elements with normal/default letter-spacing
-      if (ls === "normal" || ls === "0px") continue;
+      const color = getColorForKey(result.colorKey);
 
-      const pct = ((parseFloat(ls) / parseFloat(fs)) * 100).toFixed(2);
-      const color = getColorForValue(pct);
-
-      // Store originals
-      el.setAttribute(ATTR, ls);
-      el.setAttribute(ATTR_FS, fs);
-      el.setAttribute(ATTR_PCT, pct);
+      el.setAttribute(ATTR_VALUE, result.value);
+      el.setAttribute(ATTR_KEY, result.colorKey);
+      el.setAttribute(ATTR_LABEL, result.label);
       el.setAttribute(ATTR_ORIG_BG, el.style.backgroundColor || "");
-      el.setAttribute(ATTR_ORIG_BORDER, el.style.border || "");
       el.setAttribute(ATTR_ORIG_OUTLINE, el.style.outline || "");
 
-      // Apply highlight
       el.style.backgroundColor = color.bg;
       el.style.outline = `1px solid ${color.border}`;
 
-      // Tooltip listeners
       el.addEventListener("mouseenter", showTooltip);
       el.addEventListener("mousemove", moveTooltip);
       el.addEventListener("mouseleave", hideTooltip);
     }
 
-    // Log summary keyed by percentage
+    // Console summary
     const summary = {};
-    colorMap.forEach((color, pct) => {
-      const els = document.querySelectorAll(`[${ATTR_PCT}="${pct}"]`);
-      const pxValues = new Set();
-      els.forEach((el) => pxValues.add(el.getAttribute(ATTR)));
-      summary[`${pct}%`] = { count: els.length, pxValues: [...pxValues], color: color.border };
+    colorMap.forEach((color, key) => {
+      const count = document.querySelectorAll(
+        `[${ATTR_KEY}="${CSS.escape(key)}"]`
+      ).length;
+      summary[key] = { count, color: color.border };
     });
-    console.log("[Font Inspector] Letter-spacing values found:", summary);
+    console.log("[Font Inspector] Values found:", summary);
   }
 
   function removeHighlights() {
-    const highlighted = document.querySelectorAll(`[${ATTR}]`);
+    const highlighted = document.querySelectorAll(`[${ATTR_VALUE}]`);
     highlighted.forEach((el) => {
       el.style.backgroundColor = el.getAttribute(ATTR_ORIG_BG) || "";
-      el.style.border = el.getAttribute(ATTR_ORIG_BORDER) || "";
       el.style.outline = el.getAttribute(ATTR_ORIG_OUTLINE) || "";
 
-      el.removeAttribute(ATTR);
-      el.removeAttribute(ATTR_FS);
-      el.removeAttribute(ATTR_PCT);
+      el.removeAttribute(ATTR_VALUE);
+      el.removeAttribute(ATTR_KEY);
+      el.removeAttribute(ATTR_LABEL);
       el.removeAttribute(ATTR_ORIG_BG);
-      el.removeAttribute(ATTR_ORIG_BORDER);
       el.removeAttribute(ATTR_ORIG_OUTLINE);
 
       el.removeEventListener("mouseenter", showTooltip);
@@ -159,19 +214,18 @@
       el.removeEventListener("mouseleave", hideTooltip);
     });
 
-    tooltip.remove();
+    tooltip.style.display = "none";
     colorMap.clear();
     hueIndex = 0;
-    window.__fontInspectorActive = false;
   }
 
-  // Listen for disable message from background
+  // Listen for mode changes from background
   chrome.runtime.onMessage.addListener((msg) => {
-    if (msg.action === "disable") {
+    if (msg.action === "setMode") {
       removeHighlights();
+      if (msg.mode && modes[msg.mode]) {
+        scan(modes[msg.mode]);
+      }
     }
   });
-
-  // Run the scan
-  scan();
 })();
